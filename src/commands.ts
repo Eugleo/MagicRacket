@@ -8,6 +8,8 @@ import {
 } from "./repl";
 import { withFilePath, withRacket, withEditor } from "./utils";
 
+const DELAY_AFTER_REPL_START = 1000;
+
 function getOrDefault<K, V>(map: Map<K, V>, key: K, getDefault: Function) {
   if (!map.has(key)) {
     map.set(key, getDefault());
@@ -15,10 +17,14 @@ function getOrDefault<K, V>(map: Map<K, V>, key: K, getDefault: Function) {
   return map.get(key)!;
 }
 
+function saveActiveTextEditorAndRun(f: Function) {
+  vscode.window.activeTextEditor?.document?.save().then(_ => f());
+}
+
 export function runInTerminal(terminals: Map<string, vscode.Terminal>) {
   withFilePath((filePath: string) => {
     withRacket((racket: string) => {
-      let terminal;
+      let terminal: vscode.Terminal;
       if (
         vscode.workspace
           .getConfiguration("magic-racket.outputTerminal")
@@ -28,7 +34,7 @@ export function runInTerminal(terminals: Map<string, vscode.Terminal>) {
       } else {
         terminal = getOrDefault(terminals, filePath, () => createTerminal(filePath));
       }
-      runFileInTerminal(racket, filePath, terminal);
+      saveActiveTextEditorAndRun(() => runFileInTerminal(racket, filePath, terminal));
     });
   });
 }
@@ -36,8 +42,16 @@ export function runInTerminal(terminals: Map<string, vscode.Terminal>) {
 export function loadInRepl(repls: Map<string, vscode.Terminal>) {
   withFilePath((filePath: string) => {
     withRacket((racket: string) => {
-      const repl = getOrDefault(repls, filePath, () => createRepl(filePath, racket));
-      loadFileInRepl(filePath, repl);
+      let replAlreadyExisted = true;
+      const repl = getOrDefault(repls, filePath, () => {
+        replAlreadyExisted = false;
+        return createRepl(filePath, racket);
+      });
+
+      if (replAlreadyExisted)
+        saveActiveTextEditorAndRun(() => loadFileInRepl(filePath, repl));
+      else
+        saveActiveTextEditorAndRun(() => setTimeout(() => loadFileInRepl(filePath, repl), DELAY_AFTER_REPL_START));
     });
   });
 }
@@ -46,8 +60,16 @@ export function executeSelection(repls: Map<string, vscode.Terminal>) {
   withEditor((editor: vscode.TextEditor) => {
     withFilePath((filePath: string) => {
       withRacket((racket: string) => {
-        const repl = getOrDefault(repls, filePath, () => createRepl(filePath, racket));
-        executeSelectionInRepl(repl, editor);
+        let replAlreadyExisted = true;
+        const repl = getOrDefault(repls, filePath, () => {
+          replAlreadyExisted = false;
+          return createRepl(filePath, racket);
+        });
+
+        if (replAlreadyExisted)
+          executeSelectionInRepl(repl, editor);
+        else
+          setTimeout(() => executeSelectionInRepl(repl, editor), DELAY_AFTER_REPL_START);
       });
     });
   });
