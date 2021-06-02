@@ -17,8 +17,10 @@ function getOrDefault<K, V>(map: Map<K, V>, key: K, getDefault: Function) {
   return map.get(key)!;
 }
 
-function saveActiveTextEditorAndRun(f: Function) {
-  vscode.window.activeTextEditor?.document?.save().then(_ => f());
+function saveActiveTextEditorAndRun(f: Function): void {
+  const document = vscode.window.activeTextEditor?.document;
+  if (document != null) document.save().then(() => f());
+  else f();
 }
 
 export function runInTerminal(terminals: Map<string, vscode.Terminal>) {
@@ -48,10 +50,11 @@ export function loadInRepl(repls: Map<string, vscode.Terminal>) {
         return createRepl(filePath, racket);
       });
 
-      if (replAlreadyExisted)
-        saveActiveTextEditorAndRun(() => loadFileInRepl(filePath, repl));
+      if (replAlreadyExisted) saveActiveTextEditorAndRun(() => loadFileInRepl(filePath, repl));
       else
-        saveActiveTextEditorAndRun(() => setTimeout(() => loadFileInRepl(filePath, repl), DELAY_AFTER_REPL_START));
+        saveActiveTextEditorAndRun(() =>
+          setTimeout(() => loadFileInRepl(filePath, repl), DELAY_AFTER_REPL_START),
+        );
     });
   });
 }
@@ -66,10 +69,8 @@ export function executeSelection(repls: Map<string, vscode.Terminal>) {
           return createRepl(filePath, racket);
         });
 
-        if (replAlreadyExisted)
-          executeSelectionInRepl(repl, editor);
-        else
-          setTimeout(() => executeSelectionInRepl(repl, editor), DELAY_AFTER_REPL_START);
+        if (replAlreadyExisted) executeSelectionInRepl(repl, editor);
+        else setTimeout(() => executeSelectionInRepl(repl, editor), DELAY_AFTER_REPL_START);
       });
     });
   });
